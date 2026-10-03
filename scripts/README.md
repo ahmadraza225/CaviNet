@@ -7,6 +7,10 @@ report answering: how many patients, what the scans look like, what format the
 annotations are in, **how many patients have a cavity annotation**, and what data
 problems exist. It does not assume a folder layout.
 
+> **Before running:** see [`docs/audit/kaggle_sample_findings.md`](../docs/audit/kaggle_sample_findings.md).
+> The Kaggle release has **no lesion/cavity annotation files**. Only `PatientIndex.xlsx`
+> flags which 239 patients were annotated. Expect sections 3–4 of the report to be empty.
+
 ## Run it on Kaggle (recommended — no download needed)
 
 1. kaggle.com → **Create → New Notebook**.

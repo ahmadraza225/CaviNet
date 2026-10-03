@@ -185,6 +185,12 @@ def _slice_pos(ds):
     return None
 
 
+def _name_order_matches(items) -> bool:
+    """True if sorting files by name gives the same order as InstanceNumber."""
+    inst = [int(_f(d, "InstanceNumber", 0) or 0) for _, d in sorted(items, key=lambda x: x[0])]
+    return inst == sorted(inst)
+
+
 def audit_dicom_dir(dirpath: str, files: list[str], root: str) -> list[dict]:
     series = defaultdict(list)
     for fp in files:
@@ -220,6 +226,10 @@ def audit_dicom_dir(dirpath: str, files: list[str], root: str) -> list[dict]:
             "dir": rel_dir,
             "series_uid": uid,
             "patient_id": str(_f(ds0, "PatientID", "")),
+            # PatientID is blank in the Kaggle release, so the case folder identifies the patient
+            "patient_key": str(_f(ds0, "PatientID", "")) or os.path.basename(dirpath),
+            "transfer_syntax": str(getattr(getattr(ds0, "file_meta", None), "TransferSyntaxUID", "")),
+            "files_in_name_order": _name_order_matches(items),
             "study_uid": str(_f(ds0, "StudyInstanceUID", "")),
             "series_desc": str(_f(ds0, "SeriesDescription", "")),
             "modality": str(_f(ds0, "Modality", "")),
@@ -338,6 +348,11 @@ def audit_volume(fp: str, root: str) -> tuple[dict, list[dict]]:
                 row["n_components"] = int(cc_label(mask)[1])
         seg_rows.append(row)
 
+    if not segs and (np.issubdtype(arr.dtype, np.floating) and info["unique_values"] > 64
+                     or info["unique_values"] > 256):
+        info["error"] = "looks like an image volume, not a label mask — skipped"
+        return info, seg_rows
+
     if segs:  # 3D Slicer segmentation: use names from header
         for s in segs:
             layer = int(s.get("Layer", 0) or 0)
@@ -406,10 +421,15 @@ def hu_sample(series_df: pd.DataFrame, root: Path, n: int, seed: int) -> pd.Data
                 reader.GetGDCMSeriesFileNames(d)
             reader.SetFileNames(files)
             arr = sitk.GetArrayFromImage(reader.Execute())
-            p = np.percentile(arr, [0, 1, 50, 99, 100])
+            pad = arr < -1100                       # outside the scan circle, e.g. -3024 / -2048
+            body = arr[~pad] if (~pad).any() else arr.ravel()
+            p = np.percentile(body, [1, 50, 99])
+            air = float(((body >= -1050) & (body <= -850)).mean())
             rows.append({"dir": s["dir"], "series_uid": s["series_uid"], "shape": arr.shape,
-                         "min": p[0], "p1": p[1], "median": p[2], "p99": p[3], "max": p[4],
-                         "looks_like_HU": bool(-1100 <= p[1] <= -700 and p[3] > 0)})
+                         "min": float(arr.min()), "padding_frac": round(float(pad.mean()), 3),
+                         "p1": p[0], "median": p[1], "p99": p[2], "max": float(arr.max()),
+                         "air_frac": round(air, 3),
+                         "looks_like_HU": bool(air > 0.05 and p[2] > 100)})
         except Exception as e:  # noqa: BLE001
             rows.append({"dir": s["dir"], "series_uid": s["series_uid"], "error": str(e)[:200]})
     return pd.DataFrame(rows)
@@ -462,11 +482,11 @@ def write_report(out: Path, args, file_types, tree_lines, series, vols, segs,
         w("No DICOM series found. Check `--root`.\n")
     else:
         ct = series[series["modality"].str.upper().isin(["CT", ""])]
-        n_pat = ct["patient_id"].replace("", np.nan).nunique()
+        n_pat = ct["patient_key"].replace("", np.nan).nunique()
         w(f"- DICOM series: **{len(series)}** (CT: {len(ct)}) · modalities: {series['modality'].value_counts().to_dict()}")
-        w(f"- Distinct PatientIDs: **{n_pat}**  ·  distinct series folders: {series['dir'].nunique()}")
-        w(f"- Series per patient: {describe_num(ct.groupby('patient_id').size())}")
-        cg = ct.groupby("class_guess")["patient_id"].nunique().to_dict()
+        w(f"- Distinct patients (PatientID, else case folder): **{n_pat}**  ·  distinct series folders: {series['dir'].nunique()}")
+        w(f"- Series per patient: {describe_num(ct.groupby('patient_key').size())}")
+        cg = ct.groupby("class_guess")["patient_key"].nunique().to_dict()
         w(f"- TB / NTM guessed from folder names (patients): {cg}"
           " — expected ≈ 871 TB / 430 NTM. If 'unknown' dominates, take labels from the index table instead.")
         w(f"- Slices per series: {describe_num(ct['n_files'])}")
@@ -477,6 +497,10 @@ def write_report(out: Path, args, file_types, tree_lines, series, vols, segs,
         w(f"- Axial series: {int(ct['axial'].fillna(False).sum())} / {len(ct)}")
         w(f"- Manufacturers: {ct['manufacturer'].value_counts().head(6).to_dict()}")
         w(f"- Kernels (top 8): {ct['kernel'].value_counts().head(8).to_dict()}")
+        w(f"- Transfer syntaxes: {ct['transfer_syntax'].value_counts().to_dict()}"
+          " (JPEG-compressed files need SimpleITK/GDCM or pylibjpeg to decode pixels)")
+        w(f"- Series whose file-name order ≠ slice order: {int((~ct['files_in_name_order']).sum())}"
+          " (always sort slices by position, never by file name)")
         w("")
         thick = pd.to_numeric(ct["slice_thickness_mm"], errors="coerce")
         w("Slice-thickness buckets (decides resampling strategy):\n")
@@ -550,20 +574,20 @@ def write_report(out: Path, args, file_types, tree_lines, series, vols, segs,
         w(f"- Series with duplicate slice positions: {int((series['n_duplicate_positions'] > 0).sum())}")
         w(f"- Series with < 50 slices (likely scout/thick or incomplete): {int((series['n_files'] < 50).sum())}")
         w(f"- Series missing RescaleSlope/Intercept: {int((~series['has_rescale']).sum())}")
-        w(f"- Patients with > 1 CT series: {int((series.groupby('patient_id').size() > 1).sum())}"
+        w(f"- Patients with > 1 CT series: {int((series.groupby('patient_key').size() > 1).sum())}"
           " (pick one series per patient, and keep all of a patient's series in the same split)")
         w(f"- ⚠️ Patient info left in headers — names: {int(series['phi_patient_name'].sum())}, "
           f"birth dates: {int(series['phi_birth_date'].sum())}, institution: {int(series['phi_institution'].sum())}"
           " (must be stripped before data goes into the web app)")
     if not vols.empty and not series.empty:
-        series_tokens = set(series["patient_id"].astype(str)) | {
+        series_tokens = set(series["patient_key"].astype(str)) | {
             part for d in series["dir"] for part in Path(d).parts}
         matched = vols["case_dir"].astype(str).isin(series_tokens)
         w(f"- Annotation folders whose name matches a PatientID or DICOM folder: "
           f"{int(matched.sum())} / {len(vols)}"
           " (low → work out the linking rule by hand from the tables in section 5)")
     if hu is not None and not hu.empty:
-        w("\nHU sanity check on random series (air ≈ −1000, so p1 should be near −1000):\n")
+        w("\nHU sanity check on random series (padding < −1100 HU excluded; lungs/air ≈ −1000):\n")
         w(md_table(hu))
     w("")
 
