@@ -151,7 +151,7 @@ children.push(
     ["Version", "Date", "Change"],
     [
       ["1.0", "March 2026", "Original scope: TB cavity detection with heatmaps (10 modules)."],
-      ["2.0", "October 2026", "Revised after dataset investigation: no public cavity annotations exist for the chosen dataset. Objective changed to TB vs NTM differentiation with a calibrated confidence score. Added PRD-level requirements and a 12-phase implementation plan executed by Claude Code."],
+      ["2.0", "October 2026", "Revised after dataset investigation: no public cavity annotations exist for the chosen dataset. Objective changed to TB vs NTM differentiation with a calibrated confidence score. Added PRD-level requirements and a 12-phase implementation plan executed by Claude Code. Implementation repository: github.com/ahmadraza225/CaviNet_V1."],
     ],
     [1, 2, 7]
   )
@@ -654,7 +654,7 @@ children.push(
 // 14. Repo & git
 children.push(
   H1("14. Repository Structure and Git Workflow"),
-  H2("14.1 Repository Layout (github.com/ahmadraza225/CaviNet)"),
+  H2("14.1 Repository Layout (github.com/ahmadraza225/CaviNet_V1)"),
   table(
     ["Path", "Contents"],
     [
@@ -664,7 +664,6 @@ children.push(
       ["models/", "Downloaded model bundle (git-ignored)"],
       ["docs/", "scope/ (this document, .docx and .md), PRD traceability, USER_MANUAL, DEVELOPER_GUIDE, TRAINING_RUNBOOK, MODEL_CARD, EVALUATION_REPORT, figures/, audit/"],
       ["scripts/", "Utility scripts (e.g. dataset audit)"],
-      ["legacy/", "Earlier Streamlit prototype files, kept for reference"],
       ["docker-compose.yml, Makefile, .env.example", "One-command run: `make up`, `make down`, `make test`, `make lint`, `make seed`, `make fetch-model`, `make backup`"],
       [".github/workflows/", "CI: lint, tests and build for backend, ml and frontend"],
     ],
@@ -727,7 +726,7 @@ const phases = [
     n: 1, slug: "foundation", name: "Foundation and repository setup",
     goal: "Create the project skeleton so every later phase plugs into a working, tested, one-command system.",
     deliverables: [
-      "Move the old Streamlit prototype files (README content, pipeline/, requirements.txt) into legacy/; keep scripts/ and docs/.",
+      "Start from the clean CaviNet_V1 repository, which already contains docs/scope/, docs/audit/ and scripts/ (keep them). The earlier Streamlit prototype stays in the old CaviNet repository and is not copied.",
       "Monorepo folders backend/, frontend/, ml/, models/ (git-ignored), docs/ as in Section 14.1.",
       "Backend FastAPI skeleton with `GET /api/health` (checks database and Redis), settings from .env, Alembic initialized.",
       "Frontend React + TypeScript + Vite + Tailwind shell with routing, layout and a placeholder home page.",
@@ -739,15 +738,15 @@ const phases = [
     accept: [
       "`make up` on a clean machine starts all services; http://localhost:8080 shows the CaviNet shell; `GET /api/health` returns status ok for database and Redis.",
       "`make test` and `make lint` pass locally; CI is green on the PR.",
-      "Legacy files are in legacy/ and the new README describes the v2.0 project.",
+      "The new README describes the v2.0 project and links to docs/scope/CaviNet_Scope_Document_v2.md.",
     ],
     prompt: [
       "Build the repository foundation described in section 15, Phase 1, and the",
       "layout in section 14.1. Use the exact stack in section 13.",
       "",
       "Tasks:",
-      "1. Move README.md (old Streamlit content), pipeline/ and requirements.txt into",
-      "   legacy/. Keep scripts/ and docs/ where they are.",
+      "1. The repository already contains docs/scope/, docs/audit/ and scripts/.",
+      "   Keep them unchanged; replace the placeholder README.md in step 7.",
       "2. Create backend/ (FastAPI, Pydantic settings from .env, SQLAlchemy 2,",
       "   Alembic initialised, GET /api/health checking Postgres and Redis).",
       "3. Create frontend/ (React 18 + TypeScript + Vite + Tailwind + React Router +",
