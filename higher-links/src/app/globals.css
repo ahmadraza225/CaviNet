@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens, measured from the reference recording (1440px viewport, 2x DPR). */
+:root {
+  --bg: #fbfafd;
+  --surface: #ffffff;
+  --ink: #161924;
+  --ink-strong: #3f434b;
+  --ink-muted: #575b63;
+  --ink-faint: #9ca0a8;
+  --ink-label: #84858b;
+  --border: #eeedf0;
+  --border-strong: #dbdfe5;
+  --divider: #dadfe5;
+  --chip-bg: #f0f1f6;
+  --chip-border: #dddee3;
+  --chip-ink: #494e59;
+  --brand: #1e925e;
+  --brand-hover: #1c7f52;
+  --brand-soft: #e6f4ee;
+  --brand-ink: #1e925e;
+  --brand-pill-bg: #eff4f3;
+  --brand-pill-border: #cfe4db;
+  --brand-ring: #a7d2bb;
+  --hot-border: #ffcfb6;
+  --hot-glow: rgba(255, 145, 80, 0.55);
+  --star: #eab308;
+  --star-bright: #facc15;
+  --star-empty: #d1d2d7;
+  --soon-bg: #eeeff2;
+  --soon-ink: #8a8e96;
+  --overlay: rgba(20, 22, 30, 0.22);
+  color-scheme: light;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+@layer components {
+  .focus-ring {
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-bg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
